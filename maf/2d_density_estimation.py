@@ -7,7 +7,10 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 
-import wandb
+# import wandb
+
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 from core.mades import MADE, MADE_MOG
 from core.mafs import MAF, MAF_MOG
@@ -45,16 +48,17 @@ def main():
         assert num_ar_layers is None
         assert alternate is None
 
-    run = wandb.init(
-        project="masked-autoregressive-flow",
-        group=f"{dataset} {model}" if model.startswith("made") else f"{dataset} {model} {num_ar_layers} {alternate}",
-        name=f"seed={seed}",
-        reinit=True
-    )
+    # run = wandb.init(
+    #     project="masked-autoregressive-flow",
+    #     group=f"{dataset} {model}" if model.startswith("made") else f"{dataset} {model} {num_ar_layers} {alternate}",
+    #     name=f"seed={seed}",
+    #     reinit=True
+    # )
 
     # Select the correct dataset
 
-    data = np.load(f"./2d_data/{dataset}_gmm_samples.npy")
+    # data = np.load(f"./2d_data/{dataset}_gmm_samples.npy")
+    data = np.load(dataset)
     train_data = torch.from_numpy(data[:10000])
     test_data = torch.from_numpy(data[10000:])
 
@@ -113,22 +117,22 @@ def main():
                 ms, vs = dist.get_ms_and_vs(train_data)
                 test_loss = float(- dist.log_prob(test_data, ms=ms, vs=vs).mean())
 
-        wandb.log({
-            "Loss (Train)": train_loss,
-            "Loss (Test)": test_loss,
-        }, step=i+1)
+        # wandb.log({
+        #     "Loss (Train)": train_loss,
+        #     "Loss (Test)": test_loss,
+        # }, step=i+1)
 
         print(f"Epoch {i + 1:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss:6.3f}")
 
     # Save trained model
 
-    torch.save(dist.state_dict(), os.path.join(wandb.run.dir, "dist.pth"))
+    # torch.save(dist.state_dict(), os.path.join(wandb.run.dir, "dist.pth"))
 
     # Plotting
 
     xs = torch.linspace(-6, 6, 200)
     ys = torch.linspace(-6, 6, 200)
-    xxs, yys = torch.meshgrid(xs, ys)
+    xxs, yys = torch.meshgrid(xs, ys, indexing='ij')
     xxs_flat, yys_flat = xxs.reshape(-1, 1), yys.reshape(-1, 1)
     grid = torch.hstack([xxs_flat, yys_flat])
 
@@ -161,11 +165,11 @@ def main():
 
     # Save plot
 
-    plt.savefig(os.path.join(wandb.run.dir, png_name + ".png"), dpi=500, bbox_inches="tight")
+    plt.savefig(png_name + ".png", dpi=500, bbox_inches="tight")
 
     # Rest now
 
-    run.finish()
+    # run.finish()
 
 
 if __name__ == "__main__":
