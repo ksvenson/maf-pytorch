@@ -58,9 +58,12 @@ def main():
     # Select the correct dataset
 
     # data = np.load(f"./2d_data/{dataset}_gmm_samples.npy")
-    data = np.load(dataset)
-    train_data = torch.from_numpy(data[:10000])
-    test_data = torch.from_numpy(data[10000:])
+    data = np.load(dataset).astype(np.float32)
+
+    print(data)
+
+    train_data = torch.from_numpy(data[:900])
+    test_data = torch.from_numpy(data[900:])
 
     train_ds = TensorDataset(train_data)
     train_dl = DataLoader(train_ds, batch_size=100)
@@ -150,9 +153,6 @@ def main():
         levels=100, cmap="turbo"
     )
 
-    plt.xticks([])
-    plt.yticks([])
-
     if model in ["made", "made-mog"]:
         png_name = f"{dataset} {model.upper()} Density"
     elif model in ["maf", "maf-mog"]:
@@ -166,6 +166,8 @@ def main():
     # Save plot
 
     plt.savefig(png_name + ".png", dpi=500, bbox_inches="tight")
+    # plt.scatter(data[:, 0], data[:, 1], alpha=0.5, s=5)
+    # plt.savefig(png_name + '_with_pts' + ".png", dpi=500, bbox_inches="tight")
 
     # Rest now
 
