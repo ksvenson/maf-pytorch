@@ -51,7 +51,8 @@ def create_degrees(n_inputs, n_hiddens, input_order, mode):
 
     elif mode == 'sequential':
         for N in n_hiddens:
-            degrees_l = np.arange(N) % max(1, n_inputs - 1) + min(1, n_inputs - 1)
+            # degrees_l = np.arange(N) % max(1, n_inputs - 1) + min(1, n_inputs - 1)
+            degrees_l = np.arange(N) % n_inputs + 1
             degrees.append(degrees_l)
 
     else:

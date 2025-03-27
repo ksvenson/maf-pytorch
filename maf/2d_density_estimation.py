@@ -61,6 +61,8 @@ def main():
     data = np.load(dataset).astype(np.float32)
 
     print(data)
+    print(data.shape)
+    data /= 1e3
 
     train_data = torch.from_numpy(data[:900])
     test_data = torch.from_numpy(data[900:])
@@ -166,8 +168,8 @@ def main():
     # Save plot
 
     plt.savefig(png_name + ".png", dpi=500, bbox_inches="tight")
-    # plt.scatter(data[:, 0], data[:, 1], alpha=0.5, s=5)
-    # plt.savefig(png_name + '_with_pts' + ".png", dpi=500, bbox_inches="tight")
+    plt.scatter(data[:, 0], data[:, 1], alpha=0.5, s=5)
+    plt.savefig(png_name + '_with_pts' + ".png", dpi=500, bbox_inches="tight")
 
     # Rest now
 
