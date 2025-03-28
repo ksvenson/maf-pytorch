@@ -7,31 +7,32 @@ from torch.distributions import Categorical, Normal
 from core.gaussian import MultivariateStandardGaussian
 
 
-def create_degrees(n_inputs, n_hiddens, input_order, mode):
+def create_degrees(n_inputs, n_cond, n_hiddens, input_order, mode):
     """
     (Copied from the official codebase; I only removed the dependency on rng and changed it to numpy random.)
 
     Generates a degree for each hidden and input unit. A unit with degree d can only receive input from units with
-    degree less than d.
+    degree less than or equal to d.
 
-    :param n_inputs: the number of inputs
+    :param n_inputs: the number of data inputs
+    :param n_cond: number of conditional inputs
     :param n_hiddens: a list with the number of hidden units
     :param input_order: the order of the inputs; can be 'random', 'sequential', or an array of an explicit order
     :param mode: the strategy for assigning degrees to hidden nodes: can be 'random' or 'sequential'
     :return: list of degrees
     """
 
-    degrees = []
+    degrees = [np.full(n_inputs + n_cond, -1)]
 
     # create degrees for inputs
     if isinstance(input_order, str):
 
         if input_order == 'random':
-            degrees_0 = np.arange(1, n_inputs + 1)
-            np.random.shuffle(degrees_0)
+            degrees[0][n_cond:] = np.arange(1, n_inputs + 1)
+            np.random.shuffle(degrees[0][n_cond:])
 
         elif input_order == 'sequential':
-            degrees_0 = np.arange(1, n_inputs + 1)
+            degrees[0][n_cond:] = np.arange(1, n_inputs + 1)
 
         else:
             raise ValueError('invalid input order')
@@ -39,8 +40,7 @@ def create_degrees(n_inputs, n_hiddens, input_order, mode):
     else:
         input_order = np.array(input_order)
         assert np.all(np.sort(input_order) == np.arange(1, n_inputs + 1)), 'invalid input order'
-        degrees_0 = input_order
-    degrees.append(degrees_0)
+        degrees[0][n_cond:] = input_order
 
     # create degrees for hiddens
     if mode == 'random':
@@ -51,7 +51,6 @@ def create_degrees(n_inputs, n_hiddens, input_order, mode):
 
     elif mode == 'sequential':
         for N in n_hiddens:
-            # degrees_l = np.arange(N) % max(1, n_inputs - 1) + min(1, n_inputs - 1)
             degrees_l = np.arange(N) % n_inputs + 1
             degrees.append(degrees_l)
 
@@ -67,7 +66,7 @@ def create_masks(degrees):
     for d0, d1 in zip(degrees[:-1], degrees[1:]):
         masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)))
 
-    masks.append(torch.IntTensor(degrees[0].reshape(-1, 1) > degrees[-1].reshape(1, -1)))
+    masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)))
 
     return masks
 
@@ -85,18 +84,18 @@ class MaskedLinear(nn.Linear):
 
 class MADE(nn.Module):
 
-    def __init__(self, data_dim, hidden_dims, multiplier_max=10, input_order="sequential"):
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, input_order="sequential"):
         super().__init__()
 
         # create degrees and masks
 
-        degrees = create_degrees(data_dim, hidden_dims, input_order=input_order, mode="sequential")
+        degrees = create_degrees(data_dim, cond_dim, hidden_dims, input_order=input_order, mode="sequential")
         weight_masks = create_masks(degrees)
 
         # create masked linear layers
 
         hidden_layers = [
-            MaskedLinear(weight_masks[0], data_dim, hidden_dims[0]),
+            MaskedLinear(weight_masks[0], data_dim + cond_dim, hidden_dims[0]),
             nn.ReLU()
         ]
 
@@ -118,6 +117,7 @@ class MADE(nn.Module):
         # store info
 
         self.data_dim = data_dim
+        self.cond_dim = cond_dim
         self.degrees = degrees
         self.multiplier_max = multiplier_max
 
