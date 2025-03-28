@@ -18,7 +18,7 @@ class MAFBase(nn.Module):
 
         for _ in range(num_ar_layers):
 
-            layers.append(MADE(data_dim, hidden_dims, multiplier_max, self._current_input_order))
+            layers.append(MADE(data_dim, hidden_dims, multiplier_max=multiplier_max, input_order=self._current_input_order))
             layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
 
             if alternate_input_order:

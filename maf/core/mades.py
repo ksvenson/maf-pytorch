@@ -84,7 +84,7 @@ class MaskedLinear(nn.Linear):
 
 class MADE(nn.Module):
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, input_order="sequential"):
+    def __init__(self, data_dim, hidden_dims, cond_dim=0, multiplier_max=10, input_order="sequential"):
         super().__init__()
 
         # create degrees and masks
