@@ -9,19 +9,21 @@ from core.batch_norm import BatchNorm
 
 class MAFBase(nn.Module):
 
-    def __init__(self, data_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order):
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order):
         super().__init__()
 
+        # self._current_input_order = np.concatenate((np.full(cond_dim, -1), np.arange(1, data_dim + 1)))
         self._current_input_order = np.arange(1, data_dim + 1)
 
         layers = []
 
         for _ in range(num_ar_layers):
 
-            layers.append(MADE(data_dim, hidden_dims, multiplier_max=multiplier_max, input_order=self._current_input_order))
+            layers.append(MADE(data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, multiplier_max=multiplier_max, input_order=self._current_input_order))
             layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
 
             if alternate_input_order:
+                # self._current_input_order[cond_dim:] = self._current_input_order[cond_dim:][::-1]
                 self._current_input_order = self._current_input_order[::-1]
 
         self.layers = nn.ModuleList(layers)
@@ -86,8 +88,8 @@ class MAF(MAFBase):
 
     """A stack of GaussianMADEs with the final u's modelled by a standard Gaussian"""
 
-    def __init__(self, data_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True):
-        super().__init__(data_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True):
+        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
         self.base_dist = MultivariateStandardGaussian(D=data_dim)
 
 

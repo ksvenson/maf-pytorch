@@ -84,7 +84,7 @@ class MaskedLinear(nn.Linear):
 
 class MADE(nn.Module):
 
-    def __init__(self, data_dim, hidden_dims, cond_dim=0, multiplier_max=10, input_order="sequential"):
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, input_order="sequential"):
         super().__init__()
 
         # create degrees and masks
@@ -135,7 +135,7 @@ class MADE(nn.Module):
         """Only call this method directly when stacking GaussianMADEs into an MAF"""
         mean, pre_one_over_std = self.calc_mean_and_pre_one_over_std(x)
         one_over_std = F.sigmoid(pre_one_over_std) * self.multiplier_max
-        u = (x - mean) * one_over_std
+        u = (x[:, self.cond_dim:] - mean) * one_over_std
         logabsdet = one_over_std.log().sum(dim=1)
         return u, logabsdet
 
