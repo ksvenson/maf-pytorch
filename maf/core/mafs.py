@@ -71,8 +71,8 @@ class MAFBase(nn.Module):
         else:
             return log_prob
 
-    def sample(self, n, ms, vs):
-        x = self.base_dist.sample(n)
+    def sample(self, conds, ms, vs):
+        x = self.base_dist.sample(conds.shape[0])
         batch_norm_index = -1
         for layer in self.layers[::-1]:
             u = x
@@ -80,7 +80,7 @@ class MAFBase(nn.Module):
                 x = layer.invert(u, m=ms[batch_norm_index], v=vs[batch_norm_index])
                 batch_norm_index -= 1
             else:
-                x = layer.sample(n=n, u=u)
+                x = layer.sample(conds, u=u)
         return x
 
 
