@@ -145,14 +145,18 @@ class MADE(nn.Module):
         log_prob = log_prob_under_u + logabsdet
         return log_prob
 
-    def sample(self, conds, u=None):
+    def sample(self, n, conds=None, u=None):
+        if conds is not None:
+            assert n == conds.shape[0]
 
         if u is None:
-            u = self.base_dist.sample(conds.shape[0])
+            u = self.base_dist.sample(n)
 
         with torch.no_grad():
 
-            x = torch.hstack([conds, torch.zeros(conds.shape[0], self.data_dim)])
+            x = torch.zeros(n, self.data_dim)
+            if conds is not None:
+                x = torch.hstack([conds, x])
 
             # if isinstance(self.input_order, str):
             #     if self.input_order == "sequential":
