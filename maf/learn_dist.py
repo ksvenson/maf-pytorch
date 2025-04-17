@@ -33,13 +33,11 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, n
     if model == 'made':
         dist = MADE(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=[100, 100])
     elif model == 'made-mog':
-        assert cond_dim == 0
-        dist = MADE_MOG(data_dim=data_dim, hidden_dims=[100, 100], num_components=10)
+        dist = MADE_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=[100, 100], num_components=2)
     elif model == 'maf':
         dist = MAF(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=[100, 100], num_ar_layers=num_ar_layers, alternate_input_order=alternate)
     elif model == 'maf-mog':
-        assert cond_dim == 0
-        dist = MAF_MOG(data_dim=data_dim, hidden_dims=[100, 100], num_components=10, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
+        dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=[100, 100], num_components=2, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
 
     opt = optim.Adam(dist.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[100, 200], gamma=1 / 3)
@@ -65,10 +63,12 @@ def display_2d_uncond(dist, data, model, save_name, x, y, k, beta):
     x_grid, y_grid = torch.meshgrid(x, y, indexing='ij')
     dist_input = torch.vstack([torch.full((x_grid.numel(),), k), torch.full((x_grid.numel(),), beta),  x_grid.flatten(), y_grid.flatten()]).T
     # dist_input = torch.vstack([x_grid.flatten(), y_grid.flatten()]).T
+    data_points = data[(data[:, 0] == k) & (data[:, 1] == beta)]
     with torch.no_grad():
         if model in ('made', 'made-mog'):
             probs = dist.log_prob(dist_input).exp()
         elif model in ('maf', 'maf-mog'):
+            # ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
             ms, vs = dist.get_ms_and_vs(data)  # batch norm parameters
             probs = dist.log_prob(dist_input, ms=ms, vs=vs).exp()
 
@@ -76,13 +76,15 @@ def display_2d_uncond(dist, data, model, save_name, x, y, k, beta):
         pcm = ax.pcolormesh(x, y, probs.reshape(x.numel(), y.numel()).T, shading='nearest')
         fig.colorbar(pcm)
         fig.savefig(f'{save_name}.png', **FIG_SAVE_OPTIONS)
-        ax.scatter(data[:, -2], data[:, -1], alpha=0.25, s=3)
+        ax.scatter(data_points[:, -2], data_points[:, -1], alpha=0.25, s=3)
+        fig.savefig(f'{save_name}_with_data_pts.png', **FIG_SAVE_OPTIONS)
+
         # if model in ('made', 'made-mog'):
         #     sample = dist.sample(int(1e3), ms=ms, vs=vs, conds=dist_input[:int(1e3), :2])
         # elif model in ('maf', 'maf-mog'):
         #     sample = dist.sample(int(1e3), ms=ms, vs=vs, conds=dist_input[:int(1e3), :2])
         # ax.scatter(sample[:, -2], sample[:, -1], alpha=0.25, s=3)
-        fig.savefig(f'{save_name}_with_data_pts.png', **FIG_SAVE_OPTIONS)
+        # fig.savefig(f'{save_name}_with_sample_pts.png', **FIG_SAVE_OPTIONS)
 
         # print(f'eng var: {torch.var(sample, dim=0)[-2]}')
         # print(f'mag avg: {torch.mean(sample, dim=0)[-1]}')
@@ -164,10 +166,12 @@ def plot_crit_surface_loop(dist, model, save_name, data_flat, k_list, beta_list)
 def plot_crit_surface(dist, model, save_name, data_flat, k_list, beta_list, method='integration'):
     assert model in ('made', 'made-mog', 'maf', 'maf-mog')
     with torch.no_grad():
-        if model in ('maf', 'maf-mog'):
-            ms, vs = dist.get_ms_and_vs(data_flat)  # batch norm parameters
+        # if model in ('maf', 'maf-mog'):
+        #     ms, vs = dist.get_ms_and_vs(data_flat)  # batch norm parameters
 
         if method == 'integration':
+            if model in ('maf', 'maf-mog'):
+                ms, vs = dist.get_ms_and_vs(data_flat)  # batch norm parameters
             data = data_flat.reshape(k_list.size, beta_list.size, 1000, 4)
             p75 = np.percentile(data, 75, axis=-2)
             p25 = np.percentile(data, 25, axis=-2)
@@ -199,12 +203,16 @@ def plot_crit_surface(dist, model, save_name, data_flat, k_list, beta_list, meth
 
             eng_var = eng_sq_avg - eng_avg**2
         elif method == 'sample':
-            mean = np.full((k_list.size, beta_list.size, 4), np.nan)
-            var = np.full((k_list.size, beta_list.size, 4), np.nan)
+            mean = np.full((k_list.size, beta_list.size, 2), np.nan)
+            var = np.full((k_list.size, beta_list.size, 2), np.nan)
             n = int(1e3)
             for k_idx, k in enumerate(k_list):
                 for beta_idx, beta in enumerate(beta_list):
                     print((k_idx, beta_idx))
+                    if model in ('maf', 'maf-mog'):
+                        data_points = data_flat[(data_flat[:, 0] == k) & (data_flat[:, 1] == beta)]
+                        ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
+
                     # k_grid, beta_grid = torch.meshgrid(k_list, beta_list, indexing='ij')
                     conds = torch.vstack([torch.full((n,), k), torch.full((n,), beta)]).T
                     if model in ('made', 'made-mog'):
@@ -228,39 +236,46 @@ def plot_crit_surface(dist, model, save_name, data_flat, k_list, beta_list, meth
     fig, ax = plt.subplots()
     pcm = ax.pcolormesh(beta_list, k_list, mag_avg, shading='nearest')
     fig.colorbar(pcm)
-    ax.set(xlabel=r'$\beta$', ylabel=rf'Magnetization', title=f'Magnetization')
+    ax.set(xlabel=r'$\beta$', ylabel=rf'$k_8$', title=f'Magnetization')
     fig.savefig(f'{save_name}_mag.png', **FIG_SAVE_OPTIONS)
+
+
+def prep_data(raw_data, raw_k, raw_beta):
+    data = np.full(raw_data.shape[:-1] + (raw_data.shape[-1] + len(raw_k) + 1,), np.nan)
+    for config_idx in np.ndindex(raw_beta.shape):
+        k_vals = np.array([raw_k[k_idx][idx] for k_idx, idx in enumerate(config_idx[:-1])])
+        k_block = np.tile(k_vals, (raw_data.shape[-2], 1))
+        beta_block = np.full((raw_data.shape[-2], 1), raw_beta[config_idx])
+        data[config_idx] = np.hstack([k_block, beta_block, raw_data[config_idx]])
+    return data
 
 
 if __name__ == '__main__':
 
-    # data = np.load('./test_2d_sample.npy')[:1000]
-    data = np.load('./data.npy')[:, [0, 1, -2, -1]]
-    data[:, 2:] /= 1e4
-
-    data = data[-1000:]
+    data = np.load('./data_flat_120425.npy')
+    data[:, 2:] /= 1e3
+    # data /= 1e3
     data = torch.from_numpy(data.astype(np.float32))
 
-
-    # get_dist(data, 'test_dist_090425', model='maf', data_dim=2, cond_dim=0, num_ar_layers=1, alternate=0)
+    # get_dist(data, 'dist_scale_160425', model='maf-mog', data_dim=2, cond_dim=2, num_ar_layers=10, alternate=0)
     # quit()
 
-    dist = torch.load('./dist_270325.pth', weights_only=False)
+    # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)
+    # dist = torch.load('./dist_120425.pth', weights_only=False)
+    dist = torch.load('./dist_scale_150425.pth', weights_only=False)
+    # dist.cond_dim = 2
     # dist = torch.load('./test_dist_090425.pth', weights_only=False)
-    x = torch.linspace(-6, 6, 200)
-    y = torch.linspace(-6, 6, 200)
+    x = torch.linspace(0, 15, 200)
+    y = torch.linspace(-20, 20, 200)
 
     k = list(np.load('./sweep_150824_sw_coarse_k.npz').values())[8]
     beta = np.load('./sweep_150824_sw_coarse_beta.npy')
-    beta = beta[(0,)*len(beta.shape[:-1])]
+    beta = beta[(0,)*(beta.ndim - 1)]
 
-    display_2d_uncond(dist, data, 'maf', 'test_dist_100425', x, y, k[-1], beta[-1])
+    display_2d_uncond(dist, data, 'maf-mog', 'blah', x, y, k[0], beta[0])
     quit()
-
 
     fine_k = np.linspace(np.min(k), np.max(k), 21)
     fine_beta = np.linspace(np.min(beta), np.max(beta), 47)
 
-    # plot_crit_surface_loop(dist, 'maf', 'dist_030425_test_1000beta', data, fine_k, fine_beta)
-    # plot_crit_surface_loop(dist, 'maf', 'dist_030425_test', data, k, beta)
-    plot_crit_surface(dist, 'maf', 'dist_100425_crit_sample', data, fine_k, fine_beta, method='sample')
+    plot_crit_surface(dist, 'maf-mog', 'blah', data, fine_k, fine_beta, method='sample')

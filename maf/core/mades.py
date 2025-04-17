@@ -112,7 +112,7 @@ class MADE(nn.Module):
 
         # base distribution
 
-        self.base_dist = MultivariateStandardGaussian(D=data_dim)
+        self.base_dist = MultivariateStandardGaussian(data_dim, cond_dim)
 
         # store info
 
@@ -148,6 +148,7 @@ class MADE(nn.Module):
     def sample(self, n, conds=None, u=None):
         if conds is not None:
             assert n == conds.shape[0]
+            assert self.cond_dim == conds.shape[1]
 
         if u is None:
             u = self.base_dist.sample(n)
@@ -168,7 +169,7 @@ class MADE(nn.Module):
             # else:
             #     raise ValueError(f"{self.input_order} does not belong to a recognized type")
 
-            for d in self.degrees[0] - 1:
+            for d in self.degrees[0][self.cond_dim:] - 1:
 
                 # full forward pass
                 mean, pre_one_over_std = self.calc_mean_and_pre_one_over_std(x)  # (n, D)
@@ -185,7 +186,7 @@ class MADE(nn.Module):
                 # store samples for the d-th dimension into x
                 x[:, self.cond_dim + d] = x_d
 
-            return x
+            return x[:, self.cond_dim:]
 
 
 half_log_2pi = 0.5 * torch.log(torch.Tensor([2.]) * torch.pi)
@@ -217,18 +218,18 @@ one_dim_mog_loglik_batch = torch.vmap(torch.vmap(one_dim_mog_loglik, (0, 0, 0, 0
 
 class MADE_MOG(nn.Module):
 
-    def __init__(self, data_dim, hidden_dims, num_components, input_order="sequential"):
+    def __init__(self, data_dim, cond_dim, hidden_dims, num_components, input_order="sequential"):
         super().__init__()
 
         # create degrees and masks
 
-        degrees = create_degrees(data_dim, hidden_dims, input_order=input_order, mode="sequential")
+        degrees = create_degrees(data_dim, cond_dim, hidden_dims, input_order=input_order, mode="sequential")
         weight_masks = create_masks(degrees)
 
         # create masked linear layers
 
         hidden_layers = [
-            MaskedLinear(weight_masks[0], data_dim, hidden_dims[0]),
+            MaskedLinear(weight_masks[0], data_dim + cond_dim, hidden_dims[0]),
             nn.ReLU()
         ]
 
@@ -257,6 +258,7 @@ class MADE_MOG(nn.Module):
         # store useful info
 
         self.data_dim = data_dim
+        self.cond_dim = cond_dim
         self.degrees = degrees
         self.formula = 'bi,idc->bdc'
 
@@ -296,21 +298,26 @@ class MADE_MOG(nn.Module):
 
     def log_prob(self, x):
         mean, log_precision, log_mixing_coeff = self.calc_mean_and_log_precision_and_log_mixing_coeff(x)
-        return one_dim_mog_loglik_batch(x, mean, log_precision, log_mixing_coeff).sum(dim=1)  # interpret dim 1 as event
+        return one_dim_mog_loglik_batch(x[:, self.cond_dim:], mean, log_precision, log_mixing_coeff).sum(dim=1)  # interpret dim 1 as event
 
-    def sample(self, n):
+    def sample(self, n, conds=None):
         """
         Not easy to do reparametrized sampling for mixture of Gaussians, so samples here are not differentiable
 
         :param n: number of samples to collect
         :return: samples: (ns, data_Dim)
         """
+        if conds is not None:
+            assert n == conds.shape[0]
+            assert self.cond_dim == conds.shape[1]
 
         with torch.no_grad():
 
             x = torch.zeros(n, self.data_dim)
+            if conds is not None:
+                x = torch.hstack([conds, x])
 
-            for d in self.degrees[0] - 1:
+            for d in self.degrees[0][self.cond_dim:] - 1:
 
                 # full forward pass
                 mean, log_precision, log_mixing_coeff = \
@@ -334,6 +341,6 @@ class MADE_MOG(nn.Module):
                 ).sample()  # (n, ), clipping as in as original theano code
 
                 # store samples for the d-th dimension into x
-                x[:, d] = x_d
+                x[:, self.cond_dim + d] = x_d
 
-            return x
+            return x[:, self.cond_dim:]
