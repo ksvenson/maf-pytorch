@@ -1,1 +1,0 @@
-Files in `2d_density_estimation` are first saved in the wandb website and then downloaded (and potentially renamed). Files in `mnist_density_estimation` are saved directly by `../mnist_density_estimation.ipynb`.

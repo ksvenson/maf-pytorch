@@ -68,8 +68,8 @@ def display_2d_uncond(dist, data, model, save_name, x, y, k, beta):
         if model in ('made', 'made-mog'):
             probs = dist.log_prob(dist_input).exp()
         elif model in ('maf', 'maf-mog'):
-            # ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
-            ms, vs = dist.get_ms_and_vs(data)  # batch norm parameters
+            ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
+            # ms, vs = dist.get_ms_and_vs(data)  # batch norm parameters
             probs = dist.log_prob(dist_input, ms=ms, vs=vs).exp()
 
         fig, ax = plt.subplots()
