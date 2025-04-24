@@ -40,6 +40,7 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     opt = optim.Adam(dist.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[100, 200], gamma=1 / 3)
 
+    dist.train()
     for i in range(300):
         losses_batch = []
         for (xb,) in train_dl:

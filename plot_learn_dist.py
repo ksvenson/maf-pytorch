@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import learn_dist
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -90,13 +91,13 @@ def prep_data(raw_data, raw_k, raw_beta):
 
 if __name__ == '__main__':
 
-    data = np.load('./data_flat_120425.npy')
-    data[:, 2:] /= 1e3
+    data = np.load('./maf/data_flat_120425.npy')
+    # data[:, 2:] /= 1e3
     # data /= 1e3
-    data = torch.from_numpy(data.astype(np.float32))
+    # data = torch.from_numpy(data.astype(np.float32))
 
-    # get_dist(data, 'dist_scale_160425', model='maf-mog', data_dim=2, cond_dim=2, num_ar_layers=10, alternate=0)
-    # quit()
+    learn_dist.get_dist(data, 'dist_230425', model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=2, alternate=0, num_components=2)
+    quit()
 
     # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)
     # dist = torch.load('./dist_120425.pth', weights_only=False)

@@ -31,58 +31,37 @@ class MAFBase(nn.Module):
         self.base_dist = None  # to be defined by children classes
         self.cond_dim = cond_dim
 
-    def get_ms_and_vs(self, x):
-        with torch.no_grad():
-            ms, vs = [], []
-            temp = x[:, self.cond_dim:]
-            for i, layer in enumerate(self.layers):
-                if isinstance(layer, BatchNorm):
-                    temp, m, v = layer.calc_u_and_logabsdet(temp, return_m_and_v=True)
-                    ms.append(m)
-                    vs.append(v)
-                else:
-                    temp, _ = layer.calc_u_and_logabsdet(torch.hstack([x[:, :self.cond_dim], temp]))
-            return ms, vs
+    def train(self, mode=True):
+        for layer in self.layers:
+            layer.train(mode=mode)
+        self.training = mode
 
-    def log_prob(self, x, ms=None, vs=None, return_intermediate_values=False):
+    def eval(self):
+        self.train(mode=False)
 
+    def log_prob(self, x):
         log_prob = torch.zeros(x.shape[0])
         temp = x[:, self.cond_dim:]
 
-        if return_intermediate_values:  # for debuggin only
-            temps, logabsdets = [], []
-
         for i, layer in enumerate(self.layers):
-            if (ms is not None) and isinstance(layer, BatchNorm):
-                temp, logabsdet = layer.calc_u_and_logabsdet(temp, m=ms[i // 2], v=vs[i // 2])
-            elif isinstance(layer, BatchNorm):
+            if isinstance(layer, BatchNorm):
                 temp, logabsdet = layer.calc_u_and_logabsdet(temp)
             else:
                 temp, logabsdet = layer.calc_u_and_logabsdet(torch.hstack([x[:, :self.cond_dim], temp]))
 
             log_prob += logabsdet
 
-            if return_intermediate_values:  # for debuggin only
-                temps.append(temp)
-                logabsdets.append(logabsdet)
-
         log_prob += self.base_dist.log_prob(torch.hstack([x[:, :self.cond_dim], temp]))
+        return log_prob
 
-        if return_intermediate_values:  # for debuggin only
-            return log_prob, temps, logabsdets
-        else:
-            return log_prob
-
-    def sample(self, n, ms, vs, conds=None):
+    def sample(self, n, conds=None):
         if conds is not None:
             assert n == conds.shape[0]
         x = self.base_dist.sample(n, conds=conds)
-        batch_norm_index = -1
         for layer in self.layers[::-1]:
             u = x
             if isinstance(layer, BatchNorm):
-                x = layer.invert(u, m=ms[batch_norm_index], v=vs[batch_norm_index])
-                batch_norm_index -= 1
+                x = layer.invert(u)
             else:
                 x = layer.sample(n, conds=conds, u=u)
         return x
