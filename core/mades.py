@@ -1,3 +1,11 @@
+"""
+mades.py
+Author: Kai Svenson, forked from zhihanyang2022.
+Date: April 24, 2025
+
+Implements a "Masked Autoencoder for Distribution Estimation" (MADE) as described in [arXiv:1502.03509].
+"""
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,113 +17,125 @@ from core.gaussian import MultivariateStandardGaussian
 
 def create_degrees(n_inputs, n_cond, n_hiddens, input_order, mode):
     """
-    (Copied from the official codebase; I only removed the dependency on rng and changed it to numpy random.)
+    Copied from https://github.com/gpapamak/maf/blob/master/ml/models/mades.py.
 
     Generates a degree for each hidden and input unit. A unit with degree d can only receive input from units with
     degree less than or equal to d.
 
-    :param n_inputs: the number of data inputs
-    :param n_cond: number of conditional inputs
-    :param n_hiddens: a list with the number of hidden units
-    :param input_order: the order of the inputs; can be 'random', 'sequential', or an array of an explicit order
-    :param mode: the strategy for assigning degrees to hidden nodes: can be 'random' or 'sequential'
-    :return: list of degrees
+    `n_inputs`: int
+        The number of data inputs.
+    `n_cond`: int
+        The number of conditional inputs.
+    `n_hiddens`: list of ints
+        A list with the number of hidden units in each layer.
+    `input_order`: string or NumPy array
+        The order of the inputs. Options are 'random', 'sequential', or an array of an explicit order.
+    `mode`: string
+        The strategy for assigning degrees to hidden nodes. Options are 'random' or 'sequential'.
+
+    return: list
+        List of degrees.
     """
 
     degrees = [np.full(n_inputs + n_cond, -1)]
 
     # create degrees for inputs
     if isinstance(input_order, str):
-
         if input_order == 'random':
             degrees[0][n_cond:] = np.arange(1, n_inputs + 1)
             np.random.shuffle(degrees[0][n_cond:])
-
         elif input_order == 'sequential':
             degrees[0][n_cond:] = np.arange(1, n_inputs + 1)
-
         else:
-            raise ValueError('invalid input order')
-
+            raise ValueError(f'Invalid input order: {input_order}.')
     else:
         input_order = np.array(input_order)
         assert np.all(np.sort(input_order) == np.arange(1, n_inputs + 1)), 'invalid input order'
         degrees[0][n_cond:] = input_order
 
-    # create degrees for hiddens
+    # create degrees for hiddens layers
     if mode == 'random':
         for N in n_hiddens:
             min_prev_degree = min(np.min(degrees[-1]), n_inputs - 1)
             degrees_l = np.random.randint(min_prev_degree, n_inputs, N)
             degrees.append(degrees_l)
-
     elif mode == 'sequential':
         for N in n_hiddens:
             degrees_l = np.arange(N) % n_inputs + 1
             degrees.append(degrees_l)
-
     else:
-        raise ValueError('invalid mode')
-
+        raise ValueError(f'Invalid mode: {mode}.')
     return degrees
 
 
 def create_masks(degrees):
+    """
+    Creates binary masks between the input and hidden layers to enforce autoregressive property: a unit with degree d
+    can only receive input from units with degree less than or equal to d.
+    """
     masks = []
-
     for d0, d1 in zip(degrees[:-1], degrees[1:]):
         masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)))
-
     masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)))
-
     return masks
 
 
 class MaskedLinear(nn.Linear):
-
+    """
+    Linear layer which restricts connections between input and output nodes with a boolean mask.
+    """
     def __init__(self, mask, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert mask.shape == (self.out_features, self.in_features)
         self.mask = mask
 
-    def forward(self, inp):
-        return F.linear(inp, self.weight * self.mask, self.bias)
+    def forward(self, x):
+        return F.linear(x, self.weight * self.mask, self.bias)
 
 
 class MADE(nn.Module):
-
+    """
+    MADE: Masked Autoencoder for Distribution Estimation. See [arXiv:1502.03509].
+    """
     def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, input_order="sequential"):
+        """
+        Initialize MADE layer.
+
+        `data_dim`: int
+            Number of random variables in the PDF to be learned.
+        `cond_dim`: int
+            Number of conditional variables in the PDF to be learned.
+        `hidden_dims`: list of ints
+            Number of nodes to create in each hidden layer.
+        `multiplier_max`: positive float.
+            Sets lower bound for learned sigma: `(1/multiplier_max) < sigma`.
+        `input_order`: string
+            The order of the inputs. Options are 'random', 'sequential', or an array of an explicit order.
+        """
         super().__init__()
 
         # create degrees and masks
-
         degrees = create_degrees(data_dim, cond_dim, hidden_dims, input_order=input_order, mode="sequential")
         weight_masks = create_masks(degrees)
 
         # create masked linear layers
-
         hidden_layers = [
             MaskedLinear(weight_masks[0], data_dim + cond_dim, hidden_dims[0]),
             nn.ReLU()
         ]
-
         for i, (h0, h1) in enumerate(zip(hidden_dims[:-1], hidden_dims[1:])):
             hidden_layers.append(MaskedLinear(weight_masks[i + 1], h0, h1))
             hidden_layers.append(nn.ReLU())
-
         self.hidden = nn.Sequential(*hidden_layers)
 
         # parametrize the output distributions
-
         self.mean_layer = MaskedLinear(weight_masks[-1], hidden_dims[-1], data_dim)
         self.pre_one_over_std_layer = MaskedLinear(weight_masks[-1], hidden_dims[-1], data_dim)
 
         # base distribution
-
         self.base_dist = MultivariateStandardGaussian(data_dim, cond_dim)
 
         # store info
-
         self.data_dim = data_dim
         self.cond_dim = cond_dim
         self.degrees = degrees
@@ -123,16 +143,29 @@ class MADE(nn.Module):
 
     def calc_mean_and_pre_one_over_std(self, x):
         """
-        x: (bs, D)
-        h: (bs, H)
-        mu: (bs, D)
-        alpha: (bs, D)
+        Sends input `x` through the input and hidden layers.
+
+        `x`: `(N, cond_dim + data_dim)`, array
+
+        returns: tuple
+            Learned mean and pre 1/std, both with shape `(N, data_dim)`.
         """
         h = self.hidden(x)
         return self.mean_layer(h), self.pre_one_over_std_layer(h)
 
     def calc_u_and_logabsdet(self, x):
-        """Only call this method directly when stacking GaussianMADEs into an MAF"""
+        """
+        Computes transformed data `u`, which is predicted to be approximately distributed as a
+        standard normal gaussian: N(0, 1). Also computes the natural log of the absolute value of the determinant of
+        the transformation.
+
+        zhihanyang2022 adds: "Only call this method directly when stacking GaussianMADEs into an MAF."
+
+        `x`: `(N, cond_dim + data_dim)`, array
+
+        returns: tuple
+            Learned mean and pre 1/std, both with shape `(N, data_dim)`.
+        """
         mean, pre_one_over_std = self.calc_mean_and_pre_one_over_std(x)
         one_over_std = F.sigmoid(pre_one_over_std) * self.multiplier_max
         u = (x[:, self.cond_dim:] - mean) * one_over_std
@@ -140,6 +173,9 @@ class MADE(nn.Module):
         return u, logabsdet
 
     def log_prob(self, x):
+        """
+        Computes the log of the PDF
+        """
         u, logabsdet = self.calc_u_and_logabsdet(x)
         log_prob_under_u = self.base_dist.log_prob(u)
         log_prob = log_prob_under_u + logabsdet
