@@ -96,7 +96,7 @@ if __name__ == '__main__':
     # data /= 1e3
     # data = torch.from_numpy(data.astype(np.float32))
 
-    learn_dist.get_dist(data, 'dist_230425', model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=2, alternate=0, num_components=2)
+    learn_dist.get_dist(data, 'dist_240425', model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=2, alternate=0, num_components=2)
     quit()
 
     # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)

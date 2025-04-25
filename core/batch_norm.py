@@ -12,7 +12,7 @@ class BatchNorm(nn.BatchNorm1d):
             # Used the biased estimator, as stated in the docs:
             # https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html
             var = torch.var(x, correction=0, dim=0)
-        return self(x), torch.sum(self.weight - 0.5 * torch.log(var + self.eps))
+        return self(x), torch.sum(torch.log(self.weight) - 0.5 * torch.log(var + self.eps))
 
     def invert(self, u):
         if self.training:
