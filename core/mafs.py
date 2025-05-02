@@ -72,8 +72,8 @@ class MAF(MAFBase):
 
     """A stack of GaussianMADEs with the final u's modelled by a standard Gaussian"""
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True):
-        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True, bn=True):
+        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn=bn)
         self.base_dist = MultivariateStandardGaussian(data_dim, cond_dim)
 
 
@@ -82,6 +82,6 @@ class MAF_MOG(MAFBase):
     """A stack of GaussianMADEs with the final u's modelled by a MixtureOfGaussiansMADE"""
 
     def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, num_components=10,
-                 alternate_input_order=True):
-        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
+                 alternate_input_order=True, bn=True):
+        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn=bn)
         self.base_dist = MADE_MOG(data_dim, cond_dim, hidden_dims, num_components, self._current_input_order)

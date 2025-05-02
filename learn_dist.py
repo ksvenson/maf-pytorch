@@ -17,7 +17,7 @@ from core.mafs import MAF, MAF_MOG
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 
 
-def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None):
+def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
     """
     Given a set of random samples `data`, this method learns (estimates) the underlying PDF from which `data` was drawn.
     The learned PDF is a function p(x_1, ..., x_d | y_1, ..., y_c) where `d = data_dim`, and `c = cond_dim`.
@@ -72,9 +72,9 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     elif model == 'made-mog':
         dist = MADE_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components)
     elif model == 'maf':
-        dist = MAF(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
+        dist = MAF(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_ar_layers=num_ar_layers, alternate_input_order=alternate, bn=bn)
     elif model == 'maf-mog':
-        dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
+        dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components, num_ar_layers=num_ar_layers, alternate_input_order=alternate, bn=bn)
     else:
         raise ValueError('Unknown Model')
 

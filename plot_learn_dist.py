@@ -17,12 +17,13 @@ def display_2d_uncond(dist, data, model, save_name, x, y, k, beta):
     # dist_input = torch.vstack([x_grid.flatten(), y_grid.flatten()]).T
     data_points = data[(data[:, 0] == k) & (data[:, 1] == beta)]
     with torch.no_grad():
-        if model in ('made', 'made-mog'):
-            probs = dist.log_prob(dist_input).exp()
-        elif model in ('maf', 'maf-mog'):
-            ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
-            # ms, vs = dist.get_ms_and_vs(data)  # batch norm parameters
-            probs = dist.log_prob(dist_input, ms=ms, vs=vs).exp()
+        probs = dist.log_prob(dist_input).exp()
+        # if model in ('made', 'made-mog'):
+        #     probs = dist.log_prob(dist_input).exp()
+        # elif model in ('maf', 'maf-mog'):
+        #     ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
+        #     # ms, vs = dist.get_ms_and_vs(data)  # batch norm parameters
+        #     probs = dist.log_prob(dist_input, ms=ms, vs=vs).exp()
 
         fig, ax = plt.subplots()
         pcm = ax.pcolormesh(x, y, probs.reshape(x.numel(), y.numel()).T, shading='nearest')
@@ -91,27 +92,30 @@ def prep_data(raw_data, raw_k, raw_beta):
 
 if __name__ == '__main__':
 
-    data = np.load('./maf/data_flat_120425.npy')
-    # data[:, 2:] /= 1e3
+    data = np.load('./data_flat_120425.npy')
+    data[:, 2:] /= 1e3
     # data /= 1e3
     # data = torch.from_numpy(data.astype(np.float32))
 
-    learn_dist.get_dist(data, 'dist_240425', model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=2, alternate=0, num_components=2)
-    quit()
+    # learn_dist.get_dist(data, 'dist_010525', model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[100, 100], num_ar_layers=2, alternate=0, num_components=2, bn=False)
+    # quit()
 
     # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)
     # dist = torch.load('./dist_120425.pth', weights_only=False)
-    dist = torch.load('./dist_scale_150425.pth', weights_only=False)
+    dist = torch.load('./dist_010525.pth', weights_only=False)
     # dist.cond_dim = 2
     # dist = torch.load('./test_dist_090425.pth', weights_only=False)
     x = torch.linspace(0, 15, 200)
     y = torch.linspace(-20, 20, 200)
+    
+    dist.eval()
+
 
     k = list(np.load('./sweep_150824_sw_coarse_k.npz').values())[8]
     beta = np.load('./sweep_150824_sw_coarse_beta.npy')
     beta = beta[(0,)*(beta.ndim - 1)]
 
-    display_2d_uncond(dist, data, 'maf-mog', 'blah', x, y, k[0], beta[0])
+    display_2d_uncond(dist, data, 'maf-mog', 'no_bn_last', x, y, k[-1], beta[-1])
     quit()
 
     fine_k = np.linspace(np.min(k), np.max(k), 21)
