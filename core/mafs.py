@@ -9,7 +9,7 @@ from core.batch_norm import BatchNorm
 
 class MAFBase(nn.Module):
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order):
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn=True):
         super().__init__()
 
         # self._current_input_order = np.concatenate((np.full(cond_dim, -1), np.arange(1, data_dim + 1)))
@@ -20,7 +20,8 @@ class MAFBase(nn.Module):
         for _ in range(num_ar_layers):
 
             layers.append(MADE(data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, multiplier_max=multiplier_max, input_order=self._current_input_order))
-            layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
+            if bn:
+                layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
 
             if alternate_input_order:
                 # self._current_input_order[cond_dim:] = self._current_input_order[cond_dim:][::-1]
