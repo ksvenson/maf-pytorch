@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from core.gaussian import MultivariateStandardGaussian
-from core.mades import MADE, MADE_MOG
-from core.batch_norm import BatchNorm
+from maf_pytorch.core.gaussian import MultivariateStandardGaussian
+from maf_pytorch.core.mades import MADE, MADE_MOG
+from maf_pytorch.core.batch_norm import BatchNorm
 
 
 class MAFBase(nn.Module):

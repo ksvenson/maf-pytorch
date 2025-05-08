@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical, Normal
 
-from core.gaussian import MultivariateStandardGaussian
+from maf_pytorch.core.gaussian import MultivariateStandardGaussian
 
 
 def create_degrees(n_inputs, n_cond, n_hiddens, input_order, mode):

@@ -1,10 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import learn_dist
-
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
+import sys
+sys.path.append('..')
+
+import maf_pytorch.learn_dist
 
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 
@@ -91,9 +94,8 @@ def prep_data(raw_data, raw_k, raw_beta):
 
 
 if __name__ == '__main__':
-
-    data = np.load('./data_flat_120425.npy')
-    data[:, 2:] /= 1e3
+    data = np.load('./blah.npy')
+    data[:, 2:] /= 32*32*32
     # data /= 1e3
     # data = torch.from_numpy(data.astype(np.float32))
 
@@ -102,7 +104,7 @@ if __name__ == '__main__':
 
     # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)
     # dist = torch.load('./dist_120425.pth', weights_only=False)
-    dist = torch.load('./dist_010525.pth', weights_only=False)
+    dist = torch.load('./dist_050725_2.pth', weights_only=False)
     # dist.cond_dim = 2
     # dist = torch.load('./test_dist_090425.pth', weights_only=False)
     x = torch.linspace(0, 15, 200)
@@ -115,7 +117,7 @@ if __name__ == '__main__':
     beta = np.load('./sweep_150824_sw_coarse_beta.npy')
     beta = beta[(0,)*(beta.ndim - 1)]
 
-    display_2d_uncond(dist, data, 'maf-mog', 'no_bn_last', x, y, k[-1], beta[-1])
+    display_2d_uncond(dist, data, 'made', 'blah', x, y, k[0], beta[0])
     quit()
 
     fine_k = np.linspace(np.min(k), np.max(k), 21)

@@ -11,8 +11,8 @@ import torch
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from core.mades import MADE, MADE_MOG
-from core.mafs import MAF, MAF_MOG
+from maf_pytorch.core.mades import MADE, MADE_MOG
+from maf_pytorch.core.mafs import MAF, MAF_MOG
 
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 

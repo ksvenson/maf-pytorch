@@ -1,17 +1,21 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BatchNorm(nn.Module):
-    def __init__(self, data_dim, esp=1e-5):
+    def __init__(self, data_dim, eps=1e-5):
         super().__init__()
 
-        self.gamma = nn.Parameter(torch.ones(data_dim))
-        self.beta = nn.Paramter(torch.zeros(data_dim))
+        self.gamma = nn.Parameter(torch.zeros(data_dim))
+        self.beta = nn.Parameter(torch.zeros(data_dim))
 
         self.pop_mean = 0
         self.pop_var = 0
         self.pop_size = 0
+
+        self.data_dim = data_dim
+        self.eps = eps
 
     def forward(self, x):
         if self.training:
@@ -28,18 +32,18 @@ class BatchNorm(nn.Module):
             self.pop_mean = (self.pop_size/tot_size) * self.pop_mean + (batch_size/tot_size) * batch_mean
             self.pop_size = tot_size
 
-            xhat = (x - batch_mean) / torch.sqrt(batch_var + self.esp)
+            xhat = (x - batch_mean) / torch.sqrt(batch_var + self.eps)
         else:
-            xhat = (x - self.pop_mean) / torch.sqrt(self.pop_var + self.esp)
-        return xhat * self.gamma + self.beta
+            xhat = (x - self.pop_mean) / torch.sqrt(self.pop_var + self.eps)
+        return xhat * F.softplus(self.gamma) + self.beta
 
     def calc_u_and_logabsdet(self, x):
         var = self.pop_var
         if self.training:
             var = torch.var(x, correction=0, dim=0)
-        return self(x), torch.sum(torch.log(self.gamma) - 0.5 * torch.log(var + self.eps))
+        return self(x), torch.sum(torch.log(F.softplus(self.gamma)) - 0.5 * torch.log(var + self.eps))
 
     def invert(self, u):
         if self.training:
             raise RuntimeError('Can not call `invert` in training mode!')
-        return ((u - self.beta) / self.gamma) * torch.sqrt(self.pop_var + self.eps) + self.pop_mean
+        return ((u - self.beta) / F.softplus(self.gamma)) * torch.sqrt(self.pop_var + self.eps) + self.pop_mean
