@@ -63,7 +63,7 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    train_data = torch.from_numpy(data.astype(np.float32))
+    train_data = torch.from_numpy(data.astype(np.float32)).cuda()
     train_ds = TensorDataset(train_data)
     train_dl = DataLoader(train_ds, batch_size=100)
 
@@ -77,6 +77,8 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
         dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components, num_ar_layers=num_ar_layers, alternate_input_order=alternate, bn=bn)
     else:
         raise ValueError('Unknown Model')
+
+    dist.cuda()
 
     opt = optim.Adam(dist.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[100, 200], gamma=1 / 3)

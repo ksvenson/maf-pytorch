@@ -41,7 +41,7 @@ class MAFBase(nn.Module):
         self.train(mode=False)
 
     def log_prob(self, x):
-        log_prob = torch.zeros(x.shape[0])
+        log_prob = torch.zeros(x.shape[0]).cuda()
         temp = x[:, self.cond_dim:]
 
         for i, layer in enumerate(self.layers):

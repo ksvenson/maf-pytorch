@@ -75,8 +75,8 @@ def create_masks(degrees):
     """
     masks = []
     for d0, d1 in zip(degrees[:-1], degrees[1:]):
-        masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)))
-    masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)))
+        masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)).cuda())
+    masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)).cuda())
     return masks
 
 
@@ -225,7 +225,7 @@ class MADE(nn.Module):
             return x[:, self.cond_dim:]
 
 
-half_log_2pi = 0.5 * torch.log(torch.Tensor([2.]) * torch.pi)
+half_log_2pi = 0.5 * torch.log(torch.Tensor([2.]) * torch.pi).cuda()
 
 
 def one_dim_mog_loglik(x, mean, log_precision, log_mixing_coeff):
