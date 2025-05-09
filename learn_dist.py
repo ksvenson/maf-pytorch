@@ -3,13 +3,13 @@ import torch
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from core.mades import MADE, MADE_MOG
-from core.mafs import MAF, MAF_MOG
+from maf_pytorch.core.mades import MADE, MADE_MOG
+from maf_pytorch.core.mafs import MAF, MAF_MOG
 
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 
 
-def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None):
+def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
     assert model in ('made', 'made-mog', 'maf', 'maf-mog')
     assert data.shape[-1] == (data_dim + cond_dim)
 
@@ -31,9 +31,9 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     elif model == 'made-mog':
         dist = MADE_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components)
     elif model == 'maf':
-        dist = MAF(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
+        dist = MAF(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_ar_layers=num_ar_layers, alternate_input_order=alternate, bn=bn)
     elif model == 'maf-mog':
-        dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components, num_ar_layers=num_ar_layers, alternate_input_order=alternate)
+        dist = MAF_MOG(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, num_components=num_components, num_ar_layers=num_ar_layers, alternate_input_order=alternate, bn=bn)
     else:
         raise ValueError('Unknown Model')
 

@@ -2,14 +2,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from core.gaussian import MultivariateStandardGaussian
-from core.mades import MADE, MADE_MOG
-from core.batch_norm import BatchNorm
+from maf_pytorch.core.gaussian import MultivariateStandardGaussian
+from maf_pytorch.core.mades import MADE, MADE_MOG
+from maf_pytorch.core.batch_norm import BatchNorm
 
 
 class MAFBase(nn.Module):
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order):
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn=True):
         super().__init__()
 
         # self._current_input_order = np.concatenate((np.full(cond_dim, -1), np.arange(1, data_dim + 1)))
@@ -20,7 +20,8 @@ class MAFBase(nn.Module):
         for _ in range(num_ar_layers):
 
             layers.append(MADE(data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims, multiplier_max=multiplier_max, input_order=self._current_input_order))
-            layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
+            if bn:
+                layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
 
             if alternate_input_order:
                 # self._current_input_order[cond_dim:] = self._current_input_order[cond_dim:][::-1]
@@ -92,8 +93,8 @@ class MAF(MAFBase):
 
     """A stack of GaussianMADEs with the final u's modelled by a standard Gaussian"""
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True):
-        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
+    def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, alternate_input_order=True, bn=True):
+        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn)
         self.base_dist = MultivariateStandardGaussian(data_dim, cond_dim)
 
 
@@ -102,6 +103,6 @@ class MAF_MOG(MAFBase):
     """A stack of GaussianMADEs with the final u's modelled by a MixtureOfGaussiansMADE"""
 
     def __init__(self, data_dim, cond_dim, hidden_dims, multiplier_max=10, num_ar_layers=10, num_components=10,
-                 alternate_input_order=True):
-        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order)
+                 alternate_input_order=True, bn=True):
+        super().__init__(data_dim, cond_dim, hidden_dims, multiplier_max, num_ar_layers, alternate_input_order, bn)
         self.base_dist = MADE_MOG(data_dim, cond_dim, hidden_dims, num_components, self._current_input_order)
