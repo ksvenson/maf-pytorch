@@ -277,8 +277,7 @@ class MADE_MOG(nn.Module):
         # parametrize the output distributions
         # empirically, if I initialize the biases to be zeros, training is wayyy slower for some reason, not sure why
 
-        # self.final_mask = weight_masks[-1].unsqueeze(-1)  # (data_dim, hidden_dims[-1], 1)
-        self.register_buffer('final_mask', weight_masks[-1].unsqueeze(-1))
+        self.register_buffer('final_mask', weight_masks[-1].unsqueeze(-1))  # (data_dim, hidden_dims[-1], 1)
 
         fan_in = hidden_dims[-1]
 
