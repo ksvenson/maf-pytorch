@@ -75,8 +75,8 @@ def create_masks(degrees):
     """
     masks = []
     for d0, d1 in zip(degrees[:-1], degrees[1:]):
-        masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)).cuda())
-    masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)).cuda())
+        masks.append(torch.IntTensor(d1.reshape(-1, 1) >= d0.reshape(1, -1)))
+    masks.append(torch.IntTensor(degrees[0][degrees[0] > 0].reshape(-1, 1) > degrees[-1].reshape(1, -1)))
     return masks
 
 
@@ -87,7 +87,7 @@ class MaskedLinear(nn.Linear):
     def __init__(self, mask, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert mask.shape == (self.out_features, self.in_features)
-        self.mask = mask
+        self.register_buffer('mask', mask)
 
     def forward(self, x):
         return F.linear(x, self.weight * self.mask, self.bias)
@@ -225,9 +225,6 @@ class MADE(nn.Module):
             return x[:, self.cond_dim:]
 
 
-half_log_2pi = 0.5 * torch.log(torch.Tensor([2.]) * torch.pi).cuda()
-
-
 def one_dim_mog_loglik(x, mean, log_precision, log_mixing_coeff):
     """
     Compute the log likelihood of a one-dimensional mixture of Gaussians.
@@ -238,6 +235,8 @@ def one_dim_mog_loglik(x, mean, log_precision, log_mixing_coeff):
     :param log_mixing_coeff: (number of components)
     :return: ()
     """
+    half_log_2pi = 0.5 * torch.log(torch.Tensor([2 * torch.pi]))
+    half_log_2pi = half_log_2pi.to(device=x.device)
     return torch.logsumexp(
         log_mixing_coeff + 0.5 * log_precision - half_log_2pi - 0.5 * (x - mean).pow(2) * torch.exp(log_precision),
         dim=0
@@ -278,7 +277,8 @@ class MADE_MOG(nn.Module):
         # parametrize the output distributions
         # empirically, if I initialize the biases to be zeros, training is wayyy slower for some reason, not sure why
 
-        self.final_mask = weight_masks[-1].unsqueeze(-1)  # (data_dim, hidden_dims[-1], 1)
+        # self.final_mask = weight_masks[-1].unsqueeze(-1)  # (data_dim, hidden_dims[-1], 1)
+        self.register_buffer('final_mask', weight_masks[-1].unsqueeze(-1))
 
         fan_in = hidden_dims[-1]
 

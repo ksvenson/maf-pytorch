@@ -63,7 +63,11 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    train_data = torch.from_numpy(data.astype(np.float32)).cuda()
+    device = 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda'
+
+    train_data = torch.from_numpy(data.astype(np.float32)).to(device=device)
     train_ds = TensorDataset(train_data)
     train_dl = DataLoader(train_ds, batch_size=100)
 
@@ -78,12 +82,12 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     else:
         raise ValueError('Unknown Model')
 
-    dist.cuda()
+    dist.to(device)
+    dist.train()  # If applicable, sets all BatchNorm layers in training mode.
 
     opt = optim.Adam(dist.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[100, 200], gamma=1 / 3)
 
-    dist.train()  # If applicable, sets all BatchNorm layers in training mode.
     for i in range(300):  # 300 is arbitrary (as far as I can tell) choice made by zhihanyang2022.
         losses_batch = []
         for (xb,) in train_dl:

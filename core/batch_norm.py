@@ -7,8 +7,8 @@ class BatchNorm(nn.Module):
     def __init__(self, data_dim, eps=1e-5):
         super().__init__()
 
-        self.gamma = nn.Parameter(torch.zeros(data_dim)).cuda()
-        self.beta = nn.Parameter(torch.zeros(data_dim)).cuda()
+        self.gamma = nn.Parameter(torch.zeros(data_dim))
+        self.beta = nn.Parameter(torch.zeros(data_dim))
 
         self.pop_mean = 0
         self.pop_var = 0
