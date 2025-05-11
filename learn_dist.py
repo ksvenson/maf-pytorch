@@ -66,6 +66,7 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
     device = 'cpu'
     if torch.cuda.is_available():
         device = 'cuda'
+    print(f'Running on {device}!')
 
     train_data = torch.from_numpy(data.astype(np.float32)).to(device=device)
     train_ds = TensorDataset(train_data)
