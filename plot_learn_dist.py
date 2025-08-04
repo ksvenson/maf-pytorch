@@ -41,40 +41,38 @@ def display_2d_uncond(dist, data, model, save_name, x, y, k, beta):
 def plot_crit_surface(dist, model, save_name, data_flat, k_list, beta_list, method='integration'):
     assert model in ('made', 'made-mog', 'maf', 'maf-mog')
     with torch.no_grad():
-        # if model in ('maf', 'maf-mog'):
-        #     ms, vs = dist.get_ms_and_vs(data_flat)  # batch norm parameters
-
         mean = np.full((k_list.size, beta_list.size, 2), np.nan)
         var = np.full((k_list.size, beta_list.size, 2), np.nan)
-        n = int(1e3)
+        n = 10**6
         for k_idx, k in enumerate(k_list):
             for beta_idx, beta in enumerate(beta_list):
                 print((k_idx, beta_idx))
-                if model in ('maf', 'maf-mog'):
-                    data_points = data_flat[(data_flat[:, 0] == k) & (data_flat[:, 1] == beta)]
-                    ms, vs = dist.get_ms_and_vs(data_points)  # batch norm parameters
-
-                # k_grid, beta_grid = torch.meshgrid(k_list, beta_list, indexing='ij')
                 conds = torch.vstack([torch.full((n,), k), torch.full((n,), beta)]).T
                 if model in ('made', 'made-mog'):
                     sample = dist.sample(n, conds=conds)
                 elif model in ('maf', 'maf-mog'):
+                    nearest_data_idx = torch.argsort((data_flat[:, 0] - k)**2 + (data_flat[:, 1] - beta)**2)[:1000]
+                    ms, vs = dist.get_ms_and_vs(data_flat[nearest_data_idx])  # batch norm parameters
                     sample = dist.sample(n, ms=ms, vs=vs, conds=conds)
+                sample[:, 1] = torch.abs(sample[:, 1])
                 mean[k_idx, beta_idx] = torch.mean(sample, dim=0)
                 var[k_idx, beta_idx] = torch.var(sample, dim=0)
         eng_var = var[..., -2]
-        mag_avg = mean[..., -1]
+        mag_var = var[..., -1]
+    
+    eng_var *= (1e6/32**6)
+    mag_var *= (1e3/32**3)
 
     fig, ax = plt.subplots()
     pcm = ax.pcolormesh(beta_list, k_list, eng_var, shading='nearest')
     fig.colorbar(pcm)
-    ax.set(xlabel=r'$\beta$', ylabel=rf'$k_8$', title=f'Energy Variance')
+    ax.set(xlabel=r'$\beta$', ylabel=rf'$K_6$', title=f'Direction 6 Energy Variance')
     fig.savefig(f'{save_name}_eng.png', **FIG_SAVE_OPTIONS)
 
     fig, ax = plt.subplots()
-    pcm = ax.pcolormesh(beta_list, k_list, mag_avg, shading='nearest')
+    pcm = ax.pcolormesh(beta_list, k_list, mag_var, shading='nearest')
     fig.colorbar(pcm)
-    ax.set(xlabel=r'$\beta$', ylabel=rf'$k_8$', title=f'Magnetization')
+    ax.set(xlabel=r'$\beta$', ylabel=rf'$K_6$', title=f'Magnetization Variance')
     fig.savefig(f'{save_name}_mag.png', **FIG_SAVE_OPTIONS)
 
 
@@ -95,25 +93,32 @@ if __name__ == '__main__':
     # data /= 1e3
     data = torch.from_numpy(data.astype(np.float32))
 
-    # get_dist(data, 'dist_scale_160425', model='maf-mog', data_dim=2, cond_dim=2, num_ar_layers=10, alternate=0)
-    # quit()
-
     # dist = torch.load('./pre_mog/dist_270325.pth', weights_only=False)
     # dist = torch.load('./dist_120425.pth', weights_only=False)
-    dist = torch.load('./dist_scale_150425.pth', weights_only=False)
+    dist = torch.load('./dist_scale_160425.pth', weights_only=False)
     # dist.cond_dim = 2
     # dist = torch.load('./test_dist_090425.pth', weights_only=False)
-    x = torch.linspace(0, 15, 200)
-    y = torch.linspace(-20, 20, 200)
+    # x = torch.linspace(0, 15, 200)
+    # y = torch.linspace(-20, 20, 200)
 
     k = list(np.load('./sweep_150824_sw_coarse_k.npz').values())[8]
     beta = np.load('./sweep_150824_sw_coarse_beta.npy')
     beta = beta[(0,)*(beta.ndim - 1)]
 
-    display_2d_uncond(dist, data, 'maf-mog', 'blah', x, y, k[0], beta[0])
-    quit()
+    # display_2d_uncond(dist, data, 'maf-mog', 'blah', x, y, k[0], beta[0])
+    # quit()
+    extra = False
+    if extra:
+        span = np.max(k) - np.min(k)
+        fine_k = np.linspace(np.min(k) - 0.25*span, np.max(k) + 0.25*span, 200)
 
-    fine_k = np.linspace(np.min(k), np.max(k), 21)
-    fine_beta = np.linspace(np.min(beta), np.max(beta), 47)
+        span = np.max(beta) - np.min(beta)
+        fine_beta = np.linspace(np.min(beta) - 0.25*span, np.max(beta) + 0.25*span, 200)
 
-    plot_crit_surface(dist, 'maf-mog', 'blah', data, fine_k, fine_beta, method='sample')
+        save_name = 'dist_scale_160425_extra'
+    else:
+        fine_k = np.linspace(np.min(k), np.max(k), 21)
+        fine_beta = np.linspace(np.min(beta), np.max(beta), 47)
+        save_name = 'dist_scale_160425'
+    plot_crit_surface(dist, 'maf-mog', save_name, data, fine_k, fine_beta, method='sample')
+
