@@ -24,7 +24,6 @@ class MAFBase(nn.Module):
                 layers.append(BatchNorm(data_dim))  # insert batch norm after every autoregressive layer
 
             if alternate_input_order:
-                # self._current_input_order[cond_dim:] = self._current_input_order[cond_dim:][::-1]
                 self._current_input_order = self._current_input_order[::-1]
 
         self.layers = nn.ModuleList(layers)

@@ -3,13 +3,15 @@ import torch
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-from maf_pytorch.core.mades import MADE, MADE_MOG
-from maf_pytorch.core.mafs import MAF, MAF_MOG
+from core.mades import MADE, MADE_MOG
+from core.mafs import MAF, MAF_MOG
+
+import os
 
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 
 
-def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
+def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=333897611, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
     assert model in ('made', 'made-mog', 'maf', 'maf-mog')
     assert data.shape[-1] == (data_dim + cond_dim)
 
@@ -24,7 +26,7 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
 
     train_data = torch.from_numpy(data.astype(np.float32))
     train_ds = TensorDataset(train_data)
-    train_dl = DataLoader(train_ds, batch_size=100)
+    train_dl = DataLoader(train_ds, batch_size=100, shuffle=True)
 
     if model == 'made':
         dist = MADE(data_dim=data_dim, cond_dim=cond_dim, hidden_dims=hidden_dims)
@@ -51,5 +53,13 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3413, h
         train_loss = np.mean(losses_batch)
         scheduler.step()
         print(f"Epoch {i + 1:3.0f} | Train Loss {train_loss:6.3f}")
+        torch.save(dist, save_name)
 
-    torch.save(dist, f'./{save_name}.pth')
+
+if __name__ == '__main__':
+    train_data = np.load('sweep_150824_signed_mag_train_data.npy')
+    save_name = './dist_080825.pth'
+    if os.path.isfile(save_name):
+        print(f'Distribution "{save_name}" already exists! Aborting...')
+        quit()
+    get_dist(train_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[100, 100], num_ar_layers=10, alternate=True, num_components=2)

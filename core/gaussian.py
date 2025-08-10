@@ -14,7 +14,7 @@ class MultivariateStandardGaussian:
     def log_prob(self, x):
         return (- self.half_log_2pi - 0.5 * x[:, self.cond_dim:].pow(2)).sum(dim=1)
 
-    def sample(self, n):
+    def sample(self, n, conds=None):
         return torch.randn((n, self.data_dim))
 
 
