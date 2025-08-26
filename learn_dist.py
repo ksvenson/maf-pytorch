@@ -11,7 +11,7 @@ import os
 FIG_SAVE_OPTIONS = {'bbox_inches': 'tight', 'dpi': 300}
 
 
-def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=333897611, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
+def get_dist(train_data, test_data, save_name, model='made', data_dim=1, cond_dim=0, hidden_dims=[100, 100], num_ar_layers=None, alternate=None, num_components=None, bn=True):
     assert model in ('made', 'made-mog', 'maf', 'maf-mog')
     assert data.shape[-1] == (data_dim + cond_dim)
 
@@ -21,10 +21,9 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3338976
     if 'mog' in model:
         assert num_components is not None
 
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    train_data = torch.from_numpy(train_data.astype(np.float32))
+    test_data = torch.from_numpy(test_data.astype(np.float32))
 
-    train_data = torch.from_numpy(data.astype(np.float32))
     train_ds = TensorDataset(train_data)
     train_dl = DataLoader(train_ds, batch_size=100, shuffle=True)
 
@@ -42,24 +41,56 @@ def get_dist(data, save_name, model='made', data_dim=1, cond_dim=0, seed=3338976
     opt = optim.Adam(dist.parameters(), lr=1e-3)
     scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[100, 200], gamma=1 / 3)
 
-    for i in range(300):
+    epoch = 1
+    test_loss = []
+    delta_test_loss = []
+    while True:
         losses_batch = []
         for (xb,) in train_dl:
-            loss = - dist.log_prob(xb).mean()
+            loss = -1 * dist.log_prob(xb).mean()
             losses_batch.append(float(loss))
             opt.zero_grad()
             loss.backward()
             opt.step()
         train_loss = np.mean(losses_batch)
         scheduler.step()
-        print(f"Epoch {i + 1:3.0f} | Train Loss {train_loss:6.3f}")
+
+        with torch.no_grad():
+            if model in ('made', 'made-mog'):
+                test_loss.append(float(-dist.log_prob(test_data).mean()))
+            elif model in ('maf', 'maf-mog'):
+                ms, vs = dist.get_ms_and_vs(train_data)
+                test_loss.append(float(-dist.log_prob(test_data, ms=ms, vs=vs).mean()))
+
+        if epoch > 1:
+            delta_test_loss.append(test_loss[-1] - test_loss[-2])
+            print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f} | Delta Test Loss {delta_test_loss[-1]:6.10f}')
+            if np.count_nonzero(np.array(delta_test_loss[-5:]) > 0) >= 3:
+                break
+        else:
+            print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f}')
+
+
         torch.save(dist, save_name)
+        epoch += 1
 
 
 if __name__ == '__main__':
-    train_data = np.load('sweep_150824_signed_mag_train_data.npy')
-    save_name = './dist_080825.pth'
+    seed=333897611
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    data = np.load('sweep_150824_coarse_data.npy')
+    np.random.shuffle(data)
+    train_data = data[:data.shape[0] // 2]
+    test_data = data[data.shape[0] // 2:]
+    # we augment the training data with the negative magnetization:
+    train_data_neg_mag = np.copy(train_data)
+    train_data_neg_mag[:, -1] *= -1
+    train_data = np.vstack([train_data, train_data_neg_mag])
+
+    save_name = './dist_150825.pth'
     if os.path.isfile(save_name):
         print(f'Distribution "{save_name}" already exists! Aborting...')
         quit()
-    get_dist(train_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[100, 100], num_ar_layers=10, alternate=True, num_components=2)
+    get_dist(train_data, test_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=5, alternate=True, num_components=2)

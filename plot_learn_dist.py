@@ -89,10 +89,10 @@ def prep_data(raw_data, raw_k, raw_beta):
 
 if __name__ == '__main__':
 
-    data = np.load('./sweep_150824_train_data.npy')
+    data = np.load('./sweep_150824_coarse_data.npy')
     data = torch.from_numpy(data.astype(np.float32))
 
-    dist = torch.load('./dist_050825_maf10.pth', weights_only=False)
+    dist = torch.load('./dist_140825.pth', weights_only=False)
     x = torch.linspace(0, 0.5, 200)
     y = torch.linspace(-0.5, 0.5, 200)
 
@@ -104,10 +104,10 @@ if __name__ == '__main__':
     #     print(f'i = {i}')
     #     display_2d_uncond(dist, data, 'maf-mog', f'blah_{i}', x, y, k[-1], beta[i])
     # quit()
-    display_2d_uncond(dist, data, 'maf', f'blah', x, y, k[21 // 2], beta[17])
+    display_2d_uncond(dist, data, 'maf-mog', f'blah', x, y, k[-1], beta[-1])
     quit()
 
-    save_name = 'blah_dist_070825_h100'
+    save_name = 'blah_dist_140825'
     extra = False
     if extra:
         span = np.max(k) - np.min(k)
