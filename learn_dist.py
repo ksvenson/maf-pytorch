@@ -62,16 +62,16 @@ def get_dist(train_data, test_data, save_name, model='made', data_dim=1, cond_di
                 ms, vs = dist.get_ms_and_vs(train_data)
                 test_loss.append(float(-dist.log_prob(test_data, ms=ms, vs=vs).mean()))
 
-        if epoch > 1:
-            delta_test_loss.append(test_loss[-1] - test_loss[-2])
-            print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f} | Delta Test Loss {delta_test_loss[-1]:6.10f}')
-            if np.count_nonzero(np.array(delta_test_loss[-5:]) > 0) >= 3:
-                break
-        else:
-            print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f}')
+        with open(save_name + '_loss_record.txt', 'a') as f:
+            if epoch > 1:
+                delta_test_loss.append(test_loss[-1] - test_loss[-2])
+                print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f} | Delta Test Loss {delta_test_loss[-1]:6.10f}', file=f)
+                # if np.count_nonzero(np.array(delta_test_loss[-10:]) > 0) >= 5:
+                #     break
+            else:
+                print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f}', file=f)
 
-
-        torch.save(dist, save_name)
+        torch.save(dist, save_name + f'_e{epoch}.pth')
         epoch += 1
 
 
@@ -84,13 +84,13 @@ if __name__ == '__main__':
     np.random.shuffle(data)
     train_data = data[:data.shape[0] // 2]
     test_data = data[data.shape[0] // 2:]
-    # we augment the training data with the negative magnetization:
+    # we augment the training with the negative magnetization:
     train_data_neg_mag = np.copy(train_data)
     train_data_neg_mag[:, -1] *= -1
     train_data = np.vstack([train_data, train_data_neg_mag])
 
-    save_name = './dist_150825.pth'
-    if os.path.isfile(save_name):
-        print(f'Distribution "{save_name}" already exists! Aborting...')
+    save_name = './dist_270825_collection/dist_270825'
+    if os.path.isfile(save_name + '.pth'):
+        print(f'Distribution "{save_name}.pth" already exists! Aborting...')
         quit()
-    get_dist(train_data, test_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[10, 10], num_ar_layers=5, alternate=True, num_components=2)
+    get_dist(train_data, test_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[100, 100], num_ar_layers=5, alternate=True, num_components=2)

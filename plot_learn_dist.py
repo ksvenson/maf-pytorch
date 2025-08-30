@@ -92,7 +92,7 @@ if __name__ == '__main__':
     data = np.load('./sweep_150824_coarse_data.npy')
     data = torch.from_numpy(data.astype(np.float32))
 
-    dist = torch.load('./dist_140825.pth', weights_only=False)
+    dist = torch.load('./dist_260825_ar2_collection/dist_260825_ar2_e633.pth', weights_only=False)
     x = torch.linspace(0, 0.5, 200)
     y = torch.linspace(-0.5, 0.5, 200)
 
@@ -105,9 +105,10 @@ if __name__ == '__main__':
     #     display_2d_uncond(dist, data, 'maf-mog', f'blah_{i}', x, y, k[-1], beta[i])
     # quit()
     display_2d_uncond(dist, data, 'maf-mog', f'blah', x, y, k[-1], beta[-1])
+    # display_2d_uncond(dist, data, 'maf-mog', f'blah', x, y, k[0], beta[0])
     quit()
 
-    save_name = 'blah_dist_140825'
+    save_name = 'blah_dist_270825_e646'
     extra = False
     if extra:
         span = np.max(k) - np.min(k)

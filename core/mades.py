@@ -192,18 +192,17 @@ class MADE(nn.Module):
 half_log_2pi = 0.5 * torch.log(torch.Tensor([2.]) * torch.pi)
 
 
-def one_dim_mog_loglik(x, mean, log_precision, log_mixing_coeff):
+def one_dim_mog_loglik(x, mean, log_precision, num_components):
     """
     Compute the log likelihood of a one-dimensional mixture of Gaussians.
 
     :param x: ()
     :param mean: (number of components)
     :param log_precision: (number of components)
-    :param log_mixing_coeff: (number of components)
     :return: ()
     """
     return torch.logsumexp(
-        log_mixing_coeff + 0.5 * log_precision - half_log_2pi - 0.5 * (x - mean).pow(2) * torch.exp(log_precision),
+        torch.log(torch.tensor([1/num_components])) + 0.5 * log_precision - half_log_2pi - 0.5 * (x - mean).pow(2) * torch.exp(log_precision),
         dim=0
     )
 
@@ -213,7 +212,7 @@ def one_dim_mog_loglik(x, mean, log_precision, log_mixing_coeff):
 # log_std: (bs, D, C)
 # log_pi: (bs, D, C)
 
-one_dim_mog_loglik_batch = torch.vmap(torch.vmap(one_dim_mog_loglik, (0, 0, 0, 0), 0), (0, 0, 0, 0), 0)
+one_dim_mog_loglik_batch = torch.vmap(torch.vmap(one_dim_mog_loglik, (0, 0, 0, None), 0), (0, 0, 0, None), 0)
 
 
 class MADE_MOG(nn.Module):
@@ -252,24 +251,21 @@ class MADE_MOG(nn.Module):
         self.log_precision_W = nn.Parameter(torch.randn(data_dim, hidden_dims[-1], num_components) / fan_in)
         self.log_precision_b = nn.Parameter(torch.randn(data_dim, num_components))
 
-        self.logit_mixing_coeff_W = nn.Parameter(torch.randn(data_dim, hidden_dims[-1], num_components) / fan_in)
-        self.logit_mixing_coeff_b = nn.Parameter(torch.randn(data_dim, num_components))
-
         # store useful info
 
         self.data_dim = data_dim
         self.cond_dim = cond_dim
         self.degrees = degrees
         self.formula = 'bi,idc->bdc'
+        self.num_components = num_components
 
-    def calc_mean_and_log_precision_and_log_mixing_coeff(self, x):
+    def calc_mean_and_log_precision(self, x):
         """
         x: (bs, D)
         h: (bs, H)
 
         mean: (bs, D, C)
         log_precision: (bs, D, C)
-        log_mixing_coeff: (bs, D, C)
         """
 
         h = self.hidden(x)
@@ -286,19 +282,11 @@ class MADE_MOG(nn.Module):
             torch.transpose(self.log_precision_W * self.final_mask, 0, 1)
         ) + self.log_precision_b
 
-        logit_mixing_coeff = torch.einsum(
-            self.formula,
-            h,
-            torch.transpose(self.logit_mixing_coeff_W * self.final_mask, 0, 1)
-        ) + self.logit_mixing_coeff_b
-
-        log_mixing_coeff = F.log_softmax(logit_mixing_coeff, dim=2)
-
-        return mean, log_precision, log_mixing_coeff
+        return mean, log_precision
 
     def log_prob(self, x):
-        mean, log_precision, log_mixing_coeff = self.calc_mean_and_log_precision_and_log_mixing_coeff(x)
-        return one_dim_mog_loglik_batch(x[:, self.cond_dim:], mean, log_precision, log_mixing_coeff).sum(dim=1)  # interpret dim 1 as event
+        mean, log_precision = self.calc_mean_and_log_precision(x)
+        return one_dim_mog_loglik_batch(x[:, self.cond_dim:], mean, log_precision, self.num_components).sum(dim=1)  # interpret dim 1 as event
 
     def sample(self, n, conds=None):
         """
@@ -320,15 +308,15 @@ class MADE_MOG(nn.Module):
             for d in self.degrees[0][self.cond_dim:] - 1:
 
                 # full forward pass
-                mean, log_precision, log_mixing_coeff = \
-                    self.calc_mean_and_log_precision_and_log_mixing_coeff(x)  # (n, D, C)
+                mean, log_precision = \
+                    self.calc_mean_and_log_precision(x)  # (n, D, C)
 
                 # select the parameters for the d-th dimension
-                mean, log_precision, log_mixing_coeff = \
-                    mean[:, d, :], log_precision[:, d, :], log_mixing_coeff[:, d, :]  # (n, C)
+                mean, log_precision = \
+                    mean[:, d, :], log_precision[:, d, :]  # (n, C)
 
                 # ancestral sampling
-                comp_indices = Categorical(probs=log_mixing_coeff.exp()).sample()  # (n, )
+                comp_indices = Categorical(probs=torch.full((n, self.num_components), 1/self.num_components)).sample()  # (n, )
                 mean_selected = mean.gather(1, comp_indices.reshape(-1, 1)).reshape(-1)  # (n, )
                 log_precision_selected = log_precision.gather(1, comp_indices.reshape(-1, 1)).reshape(-1)  # (n, )
 
