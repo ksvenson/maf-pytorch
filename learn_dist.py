@@ -62,7 +62,7 @@ def get_dist(train_data, test_data, save_name, model='made', data_dim=1, cond_di
                 ms, vs = dist.get_ms_and_vs(train_data)
                 test_loss.append(float(-dist.log_prob(test_data, ms=ms, vs=vs).mean()))
 
-        with open(save_name + '_loss_record.txt', 'a') as f:
+        with open(save_name + '_loss_record.txt', 'a+') as f:
             if epoch > 1:
                 delta_test_loss.append(test_loss[-1] - test_loss[-2])
                 print(f'Epoch {epoch:3.0f} | Train Loss {train_loss:6.3f} | Test Loss {test_loss[-1]:6.3f} | Delta Test Loss {delta_test_loss[-1]:6.10f}', file=f)
@@ -80,17 +80,34 @@ if __name__ == '__main__':
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    data = np.load('sweep_150824_coarse_data.npy')
-    np.random.shuffle(data)
-    train_data = data[:data.shape[0] // 2]
-    test_data = data[data.shape[0] // 2:]
+    data = np.load('sweep_150824_fcc_k_signed_mag_train_data.npy')
+    data = data.reshape(21, 47, 1000, -1)
+    # data = data[:, ::2, :, :]  # double beta step
+    train_data = data[:, :, :500, :].reshape(-1, data.shape[-1])
+    test_data = data[:, :, 500:, :].reshape(-1, data.shape[-1])
     # we augment the training with the negative magnetization:
     train_data_neg_mag = np.copy(train_data)
     train_data_neg_mag[:, -1] *= -1
     train_data = np.vstack([train_data, train_data_neg_mag])
 
-    save_name = './dist_270825_collection/dist_270825'
+    hidden_dims = [100, 100]
+    num_ar_layers = 2
+    alternate = True
+    num_components = 2
+    bn = False
+    date = '221225'
+    tag = f'dist_{date}_ar{num_ar_layers}_h{len(hidden_dims)}x{hidden_dims[0]}_bn{int(bn)}'
+    save_name = f'./{tag}_collection/{tag}'
+
     if os.path.isfile(save_name + '.pth'):
         print(f'Distribution "{save_name}.pth" already exists! Aborting...')
         quit()
-    get_dist(train_data, test_data, save_name, model='maf-mog', data_dim=2, cond_dim=2, hidden_dims=[100, 100], num_ar_layers=5, alternate=True, num_components=2)
+    get_dist(train_data, test_data, save_name,
+             model='maf-mog',
+             data_dim=7,
+             cond_dim=7,
+             hidden_dims=hidden_dims,
+             num_ar_layers=num_ar_layers,
+             alternate=alternate,
+             num_components=num_components,
+             bn=bn)

@@ -129,6 +129,12 @@ class MADE(nn.Module):
         alpha: (bs, D)
         """
         h = self.hidden(x)
+        if not check_nan(x) and check_nan(h):
+            print(f'x:' + '-'*100)
+            print(x)
+            print(f'h:' + '-'*100)
+            print(h)
+            raise ValueError('h is giving nan!')
         return self.mean_layer(h), self.pre_one_over_std_layer(h)
 
     def calc_u_and_logabsdet(self, x):
@@ -202,6 +208,7 @@ def one_dim_mog_loglik(x, mean, log_precision, num_components):
     :return: ()
     """
     return torch.logsumexp(
+        # torch.log(torch.tensor([1/num_components])) + torch.log(one_over_std) - half_log_2pi - 0.5 * ((x - mean) * one_over_std).pow(2),
         torch.log(torch.tensor([1/num_components])) + 0.5 * log_precision - half_log_2pi - 0.5 * (x - mean).pow(2) * torch.exp(log_precision),
         dim=0
     )
@@ -214,10 +221,15 @@ def one_dim_mog_loglik(x, mean, log_precision, num_components):
 
 one_dim_mog_loglik_batch = torch.vmap(torch.vmap(one_dim_mog_loglik, (0, 0, 0, None), 0), (0, 0, 0, None), 0)
 
+def check_nan(x):
+    with torch.no_grad():
+        res = bool(torch.any(torch.isnan(x)))
+    return res
+
 
 class MADE_MOG(nn.Module):
 
-    def __init__(self, data_dim, cond_dim, hidden_dims, num_components, input_order="sequential"):
+    def __init__(self, data_dim, cond_dim, hidden_dims, num_components, input_order="sequential", multiplier_max=1e3):
         super().__init__()
 
         # create degrees and masks
@@ -248,8 +260,10 @@ class MADE_MOG(nn.Module):
         self.mean_W = nn.Parameter(torch.randn(data_dim, hidden_dims[-1], num_components) / fan_in)
         self.mean_b = nn.Parameter(torch.randn(data_dim, num_components))
 
-        self.log_precision_W = nn.Parameter(torch.randn(data_dim, hidden_dims[-1], num_components) / fan_in)
-        self.log_precision_b = nn.Parameter(torch.randn(data_dim, num_components))
+        self.pre_one_over_std_layer = MaskedLinear(weight_masks[-1], hidden_dims[-1], data_dim)
+        
+        # self.log_precision_W = nn.Parameter(torch.randn(data_dim, hidden_dims[-1], num_components) / fan_in)
+        # self.log_precision_b = nn.Parameter(torch.randn(data_dim, num_components))
 
         # store useful info
 
@@ -258,8 +272,9 @@ class MADE_MOG(nn.Module):
         self.degrees = degrees
         self.formula = 'bi,idc->bdc'
         self.num_components = num_components
+        self.multiplier_max = multiplier_max
 
-    def calc_mean_and_log_precision(self, x):
+    def calc_mean_and_std(self, x):
         """
         x: (bs, D)
         h: (bs, H)
@@ -276,16 +291,23 @@ class MADE_MOG(nn.Module):
             torch.transpose(self.mean_W * self.final_mask, 0, 1)  # (D, H, C) =(transpose)=> (H, D, C)
         ) + self.mean_b
 
-        log_precision = torch.einsum(
-            self.formula,
-            h,
-            torch.transpose(self.log_precision_W * self.final_mask, 0, 1)
-        ) + self.log_precision_b
+        # log_precision = torch.einsum(
+        #     self.formula,
+        #     h,
+        #     torch.transpose(self.log_precision_W * self.final_mask, 0, 1)
+        # ) + self.log_precision_b
 
+        # pre_one_over_std = self.pre_one_over_std_layer(h)
+        # one_over_std = F.sigmoid(pre_one_over_std) * self.multiplier_max
+        log_precision = self.pre_one_over_std_layer(h)
+
+        # return mean, one_over_std
         return mean, log_precision
 
     def log_prob(self, x):
-        mean, log_precision = self.calc_mean_and_log_precision(x)
+        # mean, one_over_std = self.calc_mean_and_std(x)
+        # return one_dim_mog_loglik_batch(x[:, self.cond_dim:], mean, one_over_std, self.num_components).sum(dim=1)  # interpret dim 1 as event
+        mean, log_precision = self.calc_mean_and_std(x)
         return one_dim_mog_loglik_batch(x[:, self.cond_dim:], mean, log_precision, self.num_components).sum(dim=1)  # interpret dim 1 as event
 
     def sample(self, n, conds=None):
@@ -309,24 +331,29 @@ class MADE_MOG(nn.Module):
 
                 # full forward pass
                 mean, log_precision = \
-                    self.calc_mean_and_log_precision(x)  # (n, D, C)
+                    self.calc_mean_and_std(x)  # (n, D, C), (n, D)
 
                 # select the parameters for the d-th dimension
                 mean, log_precision = \
-                    mean[:, d, :], log_precision[:, d, :]  # (n, C)
+                    mean[:, d, :], log_precision[:, d]  # (n, C), (n,)
 
                 # ancestral sampling
                 comp_indices = Categorical(probs=torch.full((n, self.num_components), 1/self.num_components)).sample()  # (n, )
                 mean_selected = mean.gather(1, comp_indices.reshape(-1, 1)).reshape(-1)  # (n, )
-                log_precision_selected = log_precision.gather(1, comp_indices.reshape(-1, 1)).reshape(-1)  # (n, )
+                # log_precision_selected = log_precision.gather(1, comp_indices.reshape(-1, 1)).reshape(-1)  # (n, )
 
                 # 1/std = (exp^(log(1/std^2)))^0.5 = exp(0.5 * log(1/std^2))
                 # std = (1/std)^(-1) = exp(0.5 * log(1/std^2))^(-1) = exp(- 0.5 * log(1/std^2))
 
                 x_d = Normal(
                     loc=mean_selected,
-                    scale=torch.exp(torch.min(-0.5 * log_precision_selected, torch.tensor([10.])))
+                    scale=torch.exp(-0.5 * log_precision)  # scale=torch.exp(torch.min(-0.5 * log_precision, torch.tensor([10.])))
                 ).sample()  # (n, ), clipping as in as original theano code
+
+                # x_d = Normal(
+                #     loc=mean_selected,
+                #     scale=1/one_over_std
+                # ).sample()  # (n, )
 
                 # store samples for the d-th dimension into x
                 x[:, self.cond_dim + d] = x_d
