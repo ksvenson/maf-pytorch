@@ -93,6 +93,7 @@ def plot_crit_surface(dist, model, save_name, data_flat, k, beta, b_ex, k_ex, mh
                     
                     conds = np.tile(np.array([k[dir_idx][val_idx] for dir_idx, val_idx in enumerate(config_idx) if dir_idx in FCC_IDX] + [beta[config_idx]]), (n, 1))
                     conds = torch.from_numpy(conds.astype(np.float32))
+                    conds = conds[:, list(range(4)) + [5, 4] + [6]]  # extrapolate in K5? This should give a completely meaningless result.
                     if model in ('made', 'made-mog'):
                         sample = dist.sample(n, conds=conds)
                     elif model in ('maf', 'maf-mog'):
@@ -150,10 +151,10 @@ def plot_crit_surface(dist, model, save_name, data_flat, k, beta, b_ex, k_ex, mh
     ax.fill_between(k_list, mh_beta_c[:, -1] - mh_beta_c_err[:, -1], mh_beta_c[:, -1] + mh_beta_c_err[:, -1], alpha=0.2, color='C0')
 
     for idx, dir_idx in enumerate((4, 5)):
-        ax.plot(k_list, beta_c[:, dir_idx], color=f'C{idx+1}', linestyle='solid', label=r'MAF peak $\widehat{\text{Var}}$' + rf'$(h_{dir_idx+1})$')
+        ax.plot(k_list, beta_c[:, dir_idx], color=f'C{idx+1}', linestyle='solid', label=r'MAF peak $\widehat{\text{Var}}$' + rf'$(E_{dir_idx+1})$')
         ax.fill_between(k_list, beta_c[:, dir_idx] - beta_c_err[:, dir_idx], beta_c[:, dir_idx] + beta_c_err[:, dir_idx], alpha=0.2, color=f'C{idx+1}')
 
-        ax.plot(k_list, mh_beta_c[:, dir_idx], color=f'C{idx+1}', linestyle='dotted', label=r'MH peak $\widehat{\text{Var}}$' + rf'$(h_{dir_idx+1})$')
+        ax.plot(k_list, mh_beta_c[:, dir_idx], color=f'C{idx+1}', linestyle='dotted', label=r'MH peak $\widehat{\text{Var}}$' + rf'$(E_{dir_idx+1})$')
         ax.fill_between(k_list, mh_beta_c[:, dir_idx] - mh_beta_c_err[:, dir_idx], mh_beta_c[:, dir_idx] + mh_beta_c_err[:, dir_idx], alpha=0.2, color=f'C{idx+1}')
     ax.vlines(x=k_ex[0], ymin=b_ex[0], ymax=b_ex[1], color='grey')
     ax.vlines(x=k_ex[1], ymin=b_ex[0], ymax=b_ex[1], color='grey')
@@ -170,7 +171,7 @@ def plot_crit_surface(dist, model, save_name, data_flat, k, beta, b_ex, k_ex, mh
     ax.fill_between(k_list, beta_c[:, -1] - mh_beta_c[:, -1] - res_err[:, -1], beta_c[:, -1] - mh_beta_c[:, -1] + res_err[:, -1], alpha=0.2)
 
     for idx, dir_idx in enumerate((4, 5)):
-        ax.plot(k_list, beta_c[:, dir_idx] - mh_beta_c[:, dir_idx], color=f'C{idx+1}', label=rf'$\beta_c$ from $h_{dir_idx+1}$')
+        ax.plot(k_list, beta_c[:, dir_idx] - mh_beta_c[:, dir_idx], color=f'C{idx+1}', label=rf'$\beta_c$ from $E_{dir_idx+1}$')
         ax.fill_between(k_list, beta_c[:, dir_idx] - mh_beta_c[:, dir_idx] - res_err[:, dir_idx], beta_c[:, dir_idx] - mh_beta_c[:, dir_idx] + res_err[:, dir_idx], alpha=0.2)
     ax.axvline(x=k_ex[0], color='grey')
     ax.axvline(x=k_ex[1], color='grey')
@@ -181,7 +182,7 @@ def plot_crit_surface(dist, model, save_name, data_flat, k, beta, b_ex, k_ex, mh
     fig, ax = plt.subplots()
     ax.plot(k_list, (beta_c[:, -1] - mh_beta_c[:, -1]) / res_err[:, -1], color='C0', label=r'$\beta_c$ from $|m|$')
     for idx, dir_idx in enumerate((4, 5)):
-        ax.plot(k_list, (beta_c[:, dir_idx] - mh_beta_c[:, dir_idx]) / res_err[:, dir_idx], color=f'C{idx+1}', label=rf'$\beta_c$ from $h_{dir_idx+1}$')
+        ax.plot(k_list, (beta_c[:, dir_idx] - mh_beta_c[:, dir_idx]) / res_err[:, dir_idx], color=f'C{idx+1}', label=rf'$\beta_c$ from $E_{dir_idx+1}$')
     ax.fill_between(k_list, -3, 3, color='black', alpha=0.2, label=r'$\pm 3$')
     ax.axvline(x=k_ex[0], color='grey')
     ax.axvline(x=k_ex[1], color='grey')
@@ -232,6 +233,6 @@ if __name__ == '__main__':
 
     b_ex = (0.092, 0.115)
     k_ex = (0.5, 1.5)
-    
+
     plot_crit_surface(dist, 'maf-mog', save_name, data, infer_k, infer_beta, b_ex, k_ex, mh_var=np.squeeze(mh_res['var'])[..., np.array(list(FCC_IDX) + [-1])], method='sample')
 
